@@ -30,7 +30,7 @@ void subscription_callback(const void * msgin)
 {
 	const std_msgs__msg__Int32 * msg = (const std_msgs__msg__Int32 *)msgin;
 	printf("Received: %d\n", msg->data);
-	//servo_control(&servo, msg->data);
+	servo_control(&servo, msg->data);
 }
 
 void appMain(void * arg)
@@ -52,7 +52,7 @@ void appMain(void * arg)
 	options.min_pulse = 500; // maybe got to 1000 if is too much 
 	options.max_pulse = 2500; // maybe got to 2000 if is too much 
 
-	//servo_init(&servo, &options, &allocator);
+	servo_init(&servo, &options, &allocator);
 
 	// create subscriber
 	RCCHECK(rclc_subscription_init_default(
