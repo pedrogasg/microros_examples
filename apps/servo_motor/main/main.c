@@ -16,8 +16,11 @@
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_periph.h"
 
-#include "include/servo.c"
+#include <uros_network_interfaces.h>
+#include <rmw_uros/options.h>
+#include "uxr/client/config.h"
 
+#include "servo.h"
 
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){printf("Failed status on line %d: %d. Aborting.\n",__LINE__,(int)temp_rc);vTaskDelete(NULL);}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){printf("Failed status on line %d: %d. Continuing.\n",__LINE__,(int)temp_rc);}}
@@ -33,13 +36,24 @@ void subscription_callback(const void * msgin)
 	servo_control(&servo, msg->data);
 }
 
-void appMain(void * arg)
+
+
+void micro_ros_task(void * arg)
 {
+
   	rcl_allocator_t allocator = rcl_get_default_allocator();
 	rclc_support_t support;
 
+	rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();
+	RCCHECK(rcl_init_options_init(&init_options, allocator));
+	rmw_init_options_t* rmw_options = rcl_init_options_get_rmw_init_options(&init_options);
+
+	// Static Agent IP and port can be used instead of autodisvery.
+	RCCHECK(rmw_uros_options_set_udp_address(CONFIG_MICRO_ROS_AGENT_IP, CONFIG_MICRO_ROS_AGENT_PORT, rmw_options));
+	//RCCHECK(rmw_uros_discover_agent(rmw_options));
+
 	// create init_options
-	RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+	RCCHECK(rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator));
 
 	// create node
 	rcl_node_t node;
@@ -78,4 +92,19 @@ void appMain(void * arg)
 	vTaskDelete(NULL);
 
 	
+}
+void app_main(void)
+{   
+#ifdef UCLIENT_PROFILE_UDP
+    // Start the networking if required
+    ESP_ERROR_CHECK(uros_network_interface_initialize());
+#endif  // UCLIENT_PROFILE_UDP
+
+    //pin micro-ros task in APP_CPU to make PRO_CPU to deal with wifi:
+    xTaskCreate(micro_ros_task, 
+            "uros_task", 
+            CONFIG_MICRO_ROS_APP_STACK, 
+            NULL,
+            CONFIG_MICRO_ROS_APP_TASK_PRIO, 
+            NULL); 
 }

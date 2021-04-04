@@ -17,7 +17,7 @@ servo_init(
     const servo_options_t * options,
     const rcl_allocator_t * allocator)
 {
-    RCL_CHECK_ARGUMENT_FOR_NULL(options, RCL_RET_INVALID_ARGUMENT);
+    RCUTILS_CHECK_ARGUMENT_FOR_NULL(options, RCL_RET_INVALID_ARGUMENT);
     RCL_CHECK_ALLOCATOR_WITH_MSG(allocator, "invalid allocator", return RCL_RET_INVALID_ARGUMENT);
 
     servo->impl = (servo_impl_t *)allocator->allocate(sizeof(servo_impl_t), allocator->state);
@@ -44,7 +44,7 @@ servo_per_degree(
     int32_t degree_of_rotation)
 {
     int32_t cal_pulsewidth = 0;
-    if(degree_of_rotation > -1 && degree_of_rotation < servo->impl->options.max_degree){
+    if(degree_of_rotation > -1 && degree_of_rotation <= servo->impl->options.max_degree){
         cal_pulsewidth = (servo->impl->options.min_pulse + (((servo->impl->options.max_pulse - servo->impl->options.min_pulse) * (degree_of_rotation)) / (servo->impl->options.max_degree)));
     }
     return cal_pulsewidth;
