@@ -8,76 +8,65 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#ifdef ESP_PLATFORM
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_attr.h"
 
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_periph.h"
-#endif
 
-#define SERVO_MIN_PULSEWIDTH 1000 //Minimum pulse width in microsecond
-#define SERVO_MAX_PULSEWIDTH 2000 //Maximum pulse width in microsecond
-#define SERVO_MAX_DEGREE 90 //Maximum angle in degree upto which servo can rotate
+#include <uros_network_interfaces.h>
+#include <rmw_uros/options.h>
+#include "uxr/client/config.h"
 
-static void mcpwm_example_gpio_initialize(void)
-{
-    printf("initializing mcpwm servo control gpio......\n");
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, 14);    //Set GPIO 14 as PWM0A, to which servo is connected
-
-	// Configuration
-    printf("Configuring Initial Parameters of mcpwm......\n");
-    mcpwm_config_t pwm_config;
-    pwm_config.frequency = 50;    //frequency = 50Hz, i.e. for every servo motor time period should be 20ms
-    pwm_config.cmpr_a = 0;    //duty cycle of PWMxA = 0
-    pwm_config.cmpr_b = 0;    //duty cycle of PWMxb = 0
-    pwm_config.counter_mode = MCPWM_UP_COUNTER;
-    pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-    mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);    //Configure PWM0A & PWM0B with above settings
-
-}
-
-static int32_t servo_per_degree_init(int32_t degree_of_rotation)
-{
-    int32_t cal_pulsewidth = 0;
-    cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (degree_of_rotation)) / (SERVO_MAX_DEGREE)));
-    return cal_pulsewidth;
-}
+#include "servo.h"
 
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){printf("Failed status on line %d: %d. Aborting.\n",__LINE__,(int)temp_rc);vTaskDelete(NULL);}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){printf("Failed status on line %d: %d. Continuing.\n",__LINE__,(int)temp_rc);}}
 
 rcl_subscription_t subscriber;
 std_msgs__msg__Int32 msg;
-void mcpwm_servo_control(int32_t degree)
-{
-	int32_t angle;
-	angle = servo_per_degree_init(degree);
-	printf("pulse width: %dus\n", angle);
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, angle);
-}
+servo_t servo;
 
 void subscription_callback(const void * msgin)
 {
 	const std_msgs__msg__Int32 * msg = (const std_msgs__msg__Int32 *)msgin;
 	printf("Received: %d\n", msg->data);
-	mcpwm_servo_control(msg->data);
+	servo_control(&servo, msg->data);
 }
 
 
 
-void appMain(void * arg)
+void micro_ros_task(void * arg)
 {
+
   	rcl_allocator_t allocator = rcl_get_default_allocator();
 	rclc_support_t support;
 
+	rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();
+	RCCHECK(rcl_init_options_init(&init_options, allocator));
+	rmw_init_options_t* rmw_options = rcl_init_options_get_rmw_init_options(&init_options);
+
+	// Static Agent IP and port can be used instead of autodisvery.
+	RCCHECK(rmw_uros_options_set_udp_address(CONFIG_MICRO_ROS_AGENT_IP, CONFIG_MICRO_ROS_AGENT_PORT, rmw_options));
+	//RCCHECK(rmw_uros_discover_agent(rmw_options));
+
 	// create init_options
-	RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+	RCCHECK(rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator));
 
 	// create node
 	rcl_node_t node;
 	RCCHECK(rclc_node_init_default(&node, "servo_subscriber_rclc", "", &support));
+
+	servo_options_t options;
+	options.frequency = 50; // ~ 20ms
+	options.gpio = 14; // you can choose any
+	options.max_degree = 180; // average servo do 180°
+	options.min_pulse = 500; // maybe got to 1000 if is too much 
+	options.max_pulse = 2500; // maybe got to 2000 if is too much 
+
+	servo_init(&servo, &options, &allocator);
 
 	// create subscriber
 	RCCHECK(rclc_subscription_init_default(
@@ -91,9 +80,6 @@ void appMain(void * arg)
 	RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
 	RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
 
-    //1. mcpwm gpio initialization
-    mcpwm_example_gpio_initialize();
-
 	while(1){
 			rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
 			usleep(100000);
@@ -106,4 +92,19 @@ void appMain(void * arg)
 	vTaskDelete(NULL);
 
 	
+}
+void app_main(void)
+{   
+#ifdef UCLIENT_PROFILE_UDP
+    // Start the networking if required
+    ESP_ERROR_CHECK(uros_network_interface_initialize());
+#endif  // UCLIENT_PROFILE_UDP
+
+    //pin micro-ros task in APP_CPU to make PRO_CPU to deal with wifi:
+    xTaskCreate(micro_ros_task, 
+            "uros_task", 
+            CONFIG_MICRO_ROS_APP_STACK, 
+            NULL,
+            CONFIG_MICRO_ROS_APP_TASK_PRIO, 
+            NULL); 
 }
