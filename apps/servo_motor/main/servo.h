@@ -2,11 +2,6 @@
 
 #include <rcl/rcl.h>
 
-#define SERVO_MIN_PULSEWIDTH 1000 //Minimum pulse width in microsecond
-#define SERVO_MAX_PULSEWIDTH 2000 //Maximum pulse width in microsecond
-#define SERVO_MAX_DEGREE 90 //Maximum angle in degree upto which servo can rotate
-
-
 struct servo_impl_t;
 
 typedef struct servo_t
