@@ -58,7 +58,7 @@ motor_reverse(
     motor->impl->forward = reverse;
     gpio_set_level(motor->impl->options.in1, !motor->impl->forward); // Change direction
     gpio_set_level(motor->impl->options.in2, motor->impl->forward); // Change direction
-    motor->impl->forward = !motor->impl->forward;
+//    motor->impl->forward = !motor->impl->forward;
 }
 
 void

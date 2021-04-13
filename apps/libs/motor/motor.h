@@ -2,11 +2,6 @@
 
 #include <rcl/rcl.h>
 
-#define motor_MIN_PULSEWIDTH 1000 //Minimum pulse width in microsecond
-#define motor_MAX_PULSEWIDTH 2000 //Maximum pulse width in microsecond
-#define motor_MAX_DEGREE 90 //Maximum angle in degree upto which motor can rotate
-
-
 struct motor_impl_t;
 
 typedef struct motor_t
