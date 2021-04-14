@@ -31,7 +31,13 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {
 	RCLC_UNUSED(last_call_time);
 	if (timer != NULL) {
-		msg.data = get_counter(&encoder);
+		int32_t counter;
+		if(receive(&encoder, &counter, ( TickType_t ) 10))
+		{
+			msg.data = counter;
+		}else{
+			msg.data = get_counter(&encoder);
+		}
 		RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
 	}
 }
@@ -54,14 +60,14 @@ void micro_ros_task(void * arg)
 
 	// create node
 	rcl_node_t node;
-	RCCHECK(rclc_node_init_default(&node, "esp32_int32_publisher", "", &support));
+	RCCHECK(rclc_node_init_default(&node, "encoder_publisher", "", &support));
 
 	// create publisher
 	RCCHECK(rclc_publisher_init_default(
 		&publisher,
 		&node,
 		ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-		"freertos_int32_publisher"));
+		"encoder_publisher"));
 
 	// create timer,
 	rcl_timer_t timer;

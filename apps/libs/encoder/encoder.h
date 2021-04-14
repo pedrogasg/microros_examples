@@ -29,3 +29,12 @@ encoder_init(
 int32_t
 get_counter(
     encoder_t * encoder);
+
+bool
+receive(
+    encoder_t * encoder, void * const pvBuffer, TickType_t xTicksToWait);
+
+void
+reset(
+    encoder_t * encoder);
+

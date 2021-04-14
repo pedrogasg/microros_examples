@@ -125,3 +125,22 @@ get_counter(
 {
     return encoder->impl->counter;
 }
+
+bool
+receive(
+    encoder_t * encoder,
+    void * const pvBuffer,
+    TickType_t xTicksToWait)
+{
+    return xQueueReceive(encoder->impl->queue, pvBuffer, xTicksToWait) == pdPASS;
+}
+
+void
+reset(
+    encoder_t * encoder)
+{
+    encoder->impl->counter = 0;
+    encoder->impl->state = R_START;
+    return;
+}
+
