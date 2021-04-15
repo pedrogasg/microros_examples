@@ -29,7 +29,7 @@ typedef struct encoder_impl_t
     int32_t counter;
     uint8_t state;
     
-}encoder_impl_t;
+} encoder_impl_t;
 
 static const uint8_t ttable[7][4] = {
   // R_START

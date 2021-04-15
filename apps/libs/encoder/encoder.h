@@ -11,13 +11,15 @@ typedef struct encoder_t
 {
     struct encoder_impl_t * impl;
     
-}encoder_t;
+} encoder_t;
 
 typedef struct encoder_options_t
-{   int32_t a;
+{
+    int32_t a;
     int32_t b;
     bool send;
-}encoder_options_t;
+
+} encoder_options_t;
 
 rcl_ret_t
 encoder_init(

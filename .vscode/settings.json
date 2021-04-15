@@ -9,6 +9,7 @@
         "string_view": "c",
         "*.ipp": "c",
         "functional": "c",
-        "condition_variable": "c"
+        "condition_variable": "c",
+        "int32.h": "c"
     }
 }

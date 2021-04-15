@@ -11,12 +11,14 @@ typedef struct servo_t
 }servo_t;
 
 typedef struct servo_options_t
-{   int32_t gpio; // PINOUT in the ESP32 board    
+{   
+    int32_t gpio; // PINOUT in the ESP32 board    
     int32_t max_pulse; //Minimum pulse width in microsecond
     int32_t min_pulse; //Maximum pulse width in microsecond
     int32_t max_degree; //Maximum angle in degree upto which servo can rotate
     int32_t frequency; //50Hz, i.e. for every servo motor time period should be 20ms
-}servo_options_t;
+    
+} servo_options_t;
 
 
 rcl_ret_t

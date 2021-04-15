@@ -9,7 +9,7 @@ typedef struct servo_impl_t
 {
     servo_options_t options;
 
-}servo_impl_t;
+} servo_impl_t;
 
 rcl_ret_t
 servo_init(

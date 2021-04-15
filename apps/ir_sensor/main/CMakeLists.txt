@@ -1,3 +1,3 @@
-idf_component_register(SRCS main.c ir_sensor.c
-                    INCLUDE_DIRS "" 
+idf_component_register(SRCS main.c ../../libs/dmsu/dmsu.c
+                    INCLUDE_DIRS "" "../../libs/dmsu"
                     )

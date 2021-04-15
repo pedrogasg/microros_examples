@@ -10,7 +10,7 @@ typedef struct motor_impl_t
     motor_options_t options;
     bool forward;
 
-}motor_impl_t;
+} motor_impl_t;
 
 rcl_ret_t
 motor_init(
