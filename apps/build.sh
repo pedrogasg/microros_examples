@@ -16,10 +16,6 @@ then
         echo "CONFIG_MICRO_ROS_AGENT_PORT=\"8888\"" >> sdkconfig.defaults
     fi
 
-    if [ -f "colcon.meta" ]; then
-        cp colcon.meta ../../colcon.meta
-    fi
-
     idf.py build
 
     read -n 1 -s -r -p 'Flash the device y/n: ' flash; echo
