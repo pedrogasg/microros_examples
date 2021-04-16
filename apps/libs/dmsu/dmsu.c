@@ -74,7 +74,7 @@ get_distance(
     const float b = sensor->impl->options.model.b;
     float dist = 0;
     if ( voltage > b ) {
-        dist = a / ((voltage) - b);
+        dist = a / (voltage - b);
     }
     return dist;
 }
