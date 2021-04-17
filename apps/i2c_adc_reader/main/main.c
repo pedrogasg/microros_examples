@@ -21,34 +21,28 @@
 #define SDA_GPIO 12
 #define SCL_GPIO 14
 
-#define DEV_COUNT 1
-
 #define I2C_PORT 0
 
 #define GAIN ADS111X_GAIN_4V096 // +-4.096V
 
-// I2C addresses
-static const uint8_t addr[DEV_COUNT] = {
-    ADS111X_ADDR_GND
-};
-
-static i2c_dev_t devices[DEV_COUNT];
+static i2c_dev_t device;
 
 static float gain_val;
 
-static float measure(size_t n)
+static float measure()
 {
-    // wait for conversion end
+	ESP_ERROR_CHECK(ads111x_start_conversion(&device));
+
     bool busy;
     do
     {
-        ads111x_is_busy(&devices[n], &busy);
+        ads111x_is_busy(&device, &busy);
     }
     while (busy);
 
     // Read result
     int16_t raw = 0;
-    if (ads111x_get_value(&devices[n], &raw) == ESP_OK)
+    if (ads111x_get_value(&device, &raw) == ESP_OK)
     {
         float voltage = gain_val / ADS111X_MAX_VALUE * raw;
         return voltage;
@@ -69,12 +63,12 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 	RCLC_UNUSED(last_call_time);
 	if (timer != NULL) 
 	{
-		for (size_t i = 0; i < DEV_COUNT; i++)
-		{
-			msg.data = measure(i);
-			RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
-		}
-            
+		ESP_ERROR_CHECK(ads111x_set_input_mux(&device, ADS111X_MUX_0_GND));    // positive = AIN0, negative = GND
+		msg.data = measure();
+		RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
+		ESP_ERROR_CHECK(ads111x_set_input_mux(&device, ADS111X_MUX_1_GND));    // positive = AIN0, negative = GND
+		msg.data = measure();
+		RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
 
 	}
 }
@@ -97,14 +91,14 @@ void micro_ros_task(void * arg)
 
 	// create node
 	rcl_node_t node;
-	RCCHECK(rclc_node_init_default(&node, "encoder_publisher", "", &support));
+	RCCHECK(rclc_node_init_default(&node, "distance_publisher", "", &support));
 
 	// create publisher
 	RCCHECK(rclc_publisher_init_default(
 		&publisher,
 		&node,
 		ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-		"encoder_publisher"));
+		"distance_publisher"));
 
 	// create timer,
 	rcl_timer_t timer;
@@ -118,20 +112,18 @@ void micro_ros_task(void * arg)
 	ESP_ERROR_CHECK(i2cdev_init());
 
     // Clear device descriptors
-    memset(devices, 0, sizeof(devices));
+    memset(&device, 0, sizeof(i2c_dev_t));
 
 	gain_val = ads111x_gain_values[GAIN];
 
     // Setup ICs
-    for (size_t i = 0; i < DEV_COUNT; i++)
-    {
-        ESP_ERROR_CHECK(ads111x_init_desc(&devices[i], addr[i], I2C_PORT, SDA_GPIO, SCL_GPIO));
 
-        ESP_ERROR_CHECK(ads111x_set_mode(&devices[i], ADS111X_MODE_SINGLE_SHOT));    // Continuous conversion mode
-        ESP_ERROR_CHECK(ads111x_set_data_rate(&devices[i], ADS111X_DATA_RATE_32)); // 32 samples per second
-        ESP_ERROR_CHECK(ads111x_set_input_mux(&devices[i], ADS111X_MUX_0_GND));    // positive = AIN0, negative = GND
-        ESP_ERROR_CHECK(ads111x_set_gain(&devices[i], GAIN));
-    }
+	ESP_ERROR_CHECK(ads111x_init_desc(&device, ADS111X_ADDR_GND, I2C_PORT, SDA_GPIO, SCL_GPIO));
+
+	ESP_ERROR_CHECK(ads111x_set_mode(&device, ADS111X_MODE_SINGLE_SHOT));    // Continuous conversion mode
+	ESP_ERROR_CHECK(ads111x_set_data_rate(&device, ADS111X_DATA_RATE_32)); // 32 samples per second
+	
+	ESP_ERROR_CHECK(ads111x_set_gain(&device, GAIN));
 
 	// create executor
 	rclc_executor_t executor;
