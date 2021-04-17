@@ -10,25 +10,72 @@
 #include <uros_network_interfaces.h>
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
-#include <std_msgs/msg/int32.h>
+#include <std_msgs/msg/float32.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 #include <rmw_uros/options.h>
 #include "uxr/client/config.h"
 
+#include <ads111x.h>
+
+#define SDA_GPIO 12
+#define SCL_GPIO 14
+
+#define DEV_COUNT 1
+
+#define I2C_PORT 0
+
+#define GAIN ADS111X_GAIN_4V096 // +-4.096V
+
+// I2C addresses
+static const uint8_t addr[DEV_COUNT] = {
+    ADS111X_ADDR_GND
+};
+
+static i2c_dev_t devices[DEV_COUNT];
+
+static float gain_val;
+
+static float measure(size_t n)
+{
+    // wait for conversion end
+    bool busy;
+    do
+    {
+        ads111x_is_busy(&devices[n], &busy);
+    }
+    while (busy);
+
+    // Read result
+    int16_t raw = 0;
+    if (ads111x_get_value(&devices[n], &raw) == ESP_OK)
+    {
+        float voltage = gain_val / ADS111X_MAX_VALUE * raw;
+        return voltage;
+    }
+    else
+        return 0.0;
+}
 
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){printf("Failed status on line %d: %d. Aborting.\n",__LINE__,(int)temp_rc);vTaskDelete(NULL);}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){printf("Failed status on line %d: %d. Continuing.\n",__LINE__,(int)temp_rc);}}
 
 rcl_publisher_t publisher;
-std_msgs__msg__Int32 msg;
+std_msgs__msg__Float32 msg;
+
 
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {
 	RCLC_UNUSED(last_call_time);
-	if (timer != NULL) {
-		msg.data++;
-		RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
+	if (timer != NULL) 
+	{
+		for (size_t i = 0; i < DEV_COUNT; i++)
+		{
+			msg.data = measure(i);
+			RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
+		}
+            
+
 	}
 }
 
@@ -56,7 +103,7 @@ void micro_ros_task(void * arg)
 	RCCHECK(rclc_publisher_init_default(
 		&publisher,
 		&node,
-		ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
+		ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
 		"encoder_publisher"));
 
 	// create timer,
@@ -68,11 +115,30 @@ void micro_ros_task(void * arg)
 		RCL_MS_TO_NS(timer_timeout),
 		timer_callback));
 
+	ESP_ERROR_CHECK(i2cdev_init());
+
+    // Clear device descriptors
+    memset(devices, 0, sizeof(devices));
+
+	gain_val = ads111x_gain_values[GAIN];
+
+    // Setup ICs
+    for (size_t i = 0; i < DEV_COUNT; i++)
+    {
+        ESP_ERROR_CHECK(ads111x_init_desc(&devices[i], addr[i], I2C_PORT, SDA_GPIO, SCL_GPIO));
+
+        ESP_ERROR_CHECK(ads111x_set_mode(&devices[i], ADS111X_MODE_SINGLE_SHOT));    // Continuous conversion mode
+        ESP_ERROR_CHECK(ads111x_set_data_rate(&devices[i], ADS111X_DATA_RATE_32)); // 32 samples per second
+        ESP_ERROR_CHECK(ads111x_set_input_mux(&devices[i], ADS111X_MUX_0_GND));    // positive = AIN0, negative = GND
+        ESP_ERROR_CHECK(ads111x_set_gain(&devices[i], GAIN));
+    }
+
 	// create executor
 	rclc_executor_t executor;
 	RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
 	RCCHECK(rclc_executor_add_timer(&executor, &timer));
-	
+
+
 	while(1){
 		rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
 		usleep(10000);
