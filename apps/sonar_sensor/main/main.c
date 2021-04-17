@@ -16,7 +16,7 @@
 #include <rmw_uros/options.h>
 #include "uxr/client/config.h"
 
-#include "driver/adc.h"
+#include "driver/gpio.h"
 
 #include "sonar.h"
 
@@ -32,23 +32,19 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {
 	RCLC_UNUSED(last_call_time);
 	if (timer != NULL) {
-		uint32_t signal;
+		float signal;
 		if(receive(&sensor, &signal, ( TickType_t ) 50))
 		{
-			msg.data = (float)signal  * 0.0686;
+			msg.data = signal ;
 			RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
-		}/*else{
-			signal = get_signal(&sensor);
-			msg.data = (float)signal  * 0.0686;
-		}*/
-		
+		}		
 	}
 }
 
 void sonar_scan(void * arg){
 	while(1){
 		scan(&sensor);
-		vTaskDelay((TickType_t) 10);
+		vTaskDelay((TickType_t) 100);
 	}
 	
 }
@@ -99,7 +95,7 @@ void micro_ros_task(void * arg)
 	options.echo = 12;
 	options.trigger = 14;
 	options.send = true;
-
+	gpio_install_isr_service(0);
 	sonar_init(&sensor, &options, &allocator);
 	xTaskCreate(sonar_scan, "sonar_scan", 4096, NULL, 5, NULL); 
 	while(1){

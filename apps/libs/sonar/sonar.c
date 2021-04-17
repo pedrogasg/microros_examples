@@ -10,9 +10,6 @@
 
 #include "sonar.h"
 
-#define CAP0_INT_EN BIT(27)  //Capture 0 interrupt bit
-
-static mcpwm_dev_t *MCPWM[2] = {&MCPWM0, &MCPWM1};
 
 typedef struct sonar_impl_t
 {
@@ -27,28 +24,30 @@ typedef struct sonar_impl_t
 static void IRAM_ATTR isr_sonar_handler(void * args)
 {
     sonar_impl_t * sonar = (sonar_impl_t *)args;
-    uint32_t mcpwm_intr_status;
-    mcpwm_intr_status = MCPWM[MCPWM_UNIT_0]->int_st.val; //Read interrupt status
-    //calculate the interval in the ISR,
-    //so that the interval will be always correct even when cap_queue is not handled in time and overflow.
+    uint8_t pin_state = gpio_get_level(sonar->options.echo);
+    if(pin_state == 1)
+    {
+        sonar->previous_cap_value = esp_timer_get_time();
 
-    if (mcpwm_intr_status & CAP0_INT_EN) 
-    { //Check for interrupt on rising edge on CAP0 signal
-        sonar->current_cap_value = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0); //get capture signal counter value
-        sonar->capture_signal = (sonar->current_cap_value - sonar->previous_cap_value) / (rtc_clk_apb_freq_get() / 1000000);
-        sonar->previous_cap_value = sonar->current_cap_value;
-        if(sonar->options.send)
+    } else if (pin_state == 0)
+    {
+
+        sonar->current_cap_value = esp_timer_get_time();
+        sonar->capture_signal = sonar->current_cap_value - sonar->previous_cap_value;
+        if(sonar->options.send && sonar->capture_signal < 10000)
         {
             BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            xQueueOverwriteFromISR(sonar->queue, &sonar->capture_signal, &xHigherPriorityTaskWoken );
+            float distance = sonar->capture_signal / 58.2;
+            xQueueOverwriteFromISR(sonar->queue, &distance, &xHigherPriorityTaskWoken );
             if( xHigherPriorityTaskWoken == pdTRUE )
             {
                 portYIELD_FROM_ISR();
             }
         }
+
+
     }
 
-    MCPWM[MCPWM_UNIT_0]->int_clr.val = mcpwm_intr_status; // Clear status 
 }
 
 rcl_ret_t
@@ -69,25 +68,20 @@ sonar_init(
     gp.pin_bit_mask = BIT(options->trigger) ;
     gpio_config(&gp);
 
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_CAP_0, options->echo);
-	// Configuration
-
-    mcpwm_capture_enable(MCPWM_UNIT_0, MCPWM_CAP_0, MCPWM_POS_EDGE, 0);
 
 
+    gpio_pad_select_gpio(options->echo);
+    gpio_set_pull_mode(options->echo, GPIO_PULLUP_ONLY);
+    gpio_set_direction(options->echo, GPIO_MODE_INPUT);
+    gpio_set_intr_type(options->echo, GPIO_INTR_ANYEDGE);
 
     gpio_set_level(options->trigger, 0); //Set trigger low
-    gpio_pulldown_en(options->echo);
-
-    MCPWM[MCPWM_UNIT_0]->int_ena.val = CAP0_INT_EN;  //Enable interrupt on  CAP0, https://github.com/espressif/esp-idf/blob/master/components/soc/esp32s3/include/soc/mcpwm_struct.h
-
-    mcpwm_isr_register(MCPWM_UNIT_0, isr_sonar_handler, sonar->impl, ESP_INTR_FLAG_IRAM, NULL);  //Set ISR Handler
 
     if(options->send)
     {
-        sonar->impl->queue = xQueueCreate(1, sizeof(uint32_t));
+        sonar->impl->queue = xQueueCreate(1, sizeof(float));
     }
-
+    gpio_isr_handler_add(options->echo, isr_sonar_handler, sonar->impl);
     return RCL_RET_OK;
 }
 
@@ -100,13 +94,6 @@ scan(
     vTaskDelay((TickType_t) 50);
     gpio_set_level(sonar->impl->options.trigger, 0); // Set trigger low
 
-}
-
-uint32_t
-get_signal(
-    sonar_t * sonar)
-{
-    return sonar->impl->capture_signal;
 }
 
 bool

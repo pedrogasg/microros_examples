@@ -32,10 +32,6 @@ void
 scan(
     sonar_t * sonar);
 
-uint32_t
-get_signal(
-    sonar_t * sonar);
-
 bool
 receive(
     sonar_t * sonar,
