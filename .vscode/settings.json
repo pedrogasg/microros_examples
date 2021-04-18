@@ -11,5 +11,10 @@
         "functional": "c",
         "condition_variable": "c",
         "int32.h": "c"
-    }
+    },
+    "ros.distro": "foxy",
+    "python.autoComplete.extraPaths": [
+        "/opt/ros/foxy/lib/python3.6/site-packages"
+    ],
+    "cmake.sourceDirectory": "${workspaceFolder}/apps/servo_motor"
 }
